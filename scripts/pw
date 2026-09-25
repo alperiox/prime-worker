@@ -1,0 +1,351 @@
+#!/usr/bin/env bash
+# pw - manage prime-agent delegation workers.
+# A worker is a named directory holding exactly one session .jsonl.
+set -euo pipefail
+
+PW_HOME="${PW_HOME:-$HOME/.claude/prime-workers}"
+PW_PROVIDER="${PW_PROVIDER:-opencode-go}"
+PW_DEFAULT_MODEL="${PW_DEFAULT_MODEL:-deepseek-v4-flash}"
+
+die() { echo "pw: $*" >&2; exit 1; }
+
+# Passed verbatim by --cite. Converts a cheap model's prose into claims that
+# cost one Read each to check, which is the whole economic case for delegating.
+PW_CITATION_CONTRACT='Every factual claim you make MUST be followed by a citation in the form
+`path:line` or `path:start-end` pointing at the exact source you read it from.
+A claim with no citation is not allowed - if you cannot cite it, either read the
+file to find it, or write "UNVERIFIED" next to it. Do not infer, guess, or
+generalize from filenames. End your response with a section "## Not read"
+listing files or directories you did not open, so the reader knows the coverage gaps.'
+
+wdir() { printf '%s/%s' "$PW_HOME" "$1"; }
+
+handle() {
+  local d; d=$(wdir "$1")
+  [ -d "$d" ] || die "no worker '$1' (try: pw list)"
+  local f; f=$(find "$d" -maxdepth 1 -name '*.jsonl' | head -1)
+  [ -n "$f" ] || die "worker '$1' has no session file yet"
+  printf '%s' "$f"
+}
+
+# Populates PROMPT from trailing args, or stdin when none were given.
+read_prompt() {
+  if [ "$#" -gt 0 ]; then PROMPT="$*"
+  elif [ ! -t 0 ]; then PROMPT=$(cat)
+  else die "no prompt given (pass as arguments or on stdin)"; fi
+  [ -n "${PROMPT// }" ] || die "prompt is empty"
+}
+
+# Shared flag parser. Consumed flags are removed; the rest lands in REST.
+parse_flags() {
+  CWD=""; MODEL=""; THINKING=""; MODE=""; SYSTEM=(); REST=()
+  AUTO=0; GATES=(); MAXTURNS=""; MAXCONT=""; TIMEOUT=""; CITE=""
+  while [ "$#" -gt 0 ]; do
+    case "$1" in
+      --cwd)      CWD="$2"; shift 2 ;;
+      --model|-m) MODEL="$2"; shift 2 ;;
+      --thinking) THINKING="$2"; shift 2 ;;
+      --system)   SYSTEM+=("$2"); shift 2 ;;
+      --json)     MODE="json"; shift ;;
+      --cite)     CITE=1; shift ;;
+      --no-cite)  CITE=0; shift ;;
+      --auto)     AUTO=1; shift ;;
+      --gate)     GATES+=("$2"); AUTO=1; shift 2 ;;
+      --max-turns)         MAXTURNS="$2"; shift 2 ;;
+      --max-continuations) MAXCONT="$2"; shift 2 ;;
+      --timeout)           TIMEOUT="$2"; shift 2 ;;
+      --)         shift; REST+=("$@"); break ;;
+      -*)         die "unknown flag: $1" ;;
+      *)          REST+=("$1"); shift ;;
+    esac
+  done
+}
+
+run_agent() {
+  # $1: session flag ('' | -r | --fork), $2: its value, $3: session-dir
+  local sflag="$1" sval="$2" sdir="$3"; shift 3
+  # Ensure the daemon is up before the run (about 1s) so it is not one more
+  # variable when a run misbehaves.
+  prime-agent status >/dev/null 2>&1 || true
+  local args=(--provider "$PW_PROVIDER" --model "$MODEL" --session-dir "$sdir")
+  [ -n "$sflag" ] && args+=("$sflag" "$sval")
+  [ -n "$CWD" ] && args+=(--cwd "$CWD")
+  [ -n "$THINKING" ] && args+=(--thinking "$THINKING")
+  [ -n "$MODE" ] && args+=(--mode "$MODE")
+  [ "${CITE:-0}" = 1 ] && args+=(--append-system-prompt "$PW_CITATION_CONTRACT")
+  local s; for s in ${SYSTEM+"${SYSTEM[@]}"}; do args+=(--append-system-prompt "$s"); done
+  if [ "${AUTO:-0}" = 1 ]; then
+    args+=(--autonomous)
+    local g; for g in ${GATES+"${GATES[@]}"}; do args+=(--autonomous-gate "$g"); done
+    [ "${#GATES[@]}" -eq 0 ] && echo "pw: warning: --auto with no --gate; only turn/token limits will stop it" >&2
+    [ -n "$MAXTURNS" ] && args+=(--autonomous-max-turns "$MAXTURNS")
+    [ -n "$MAXCONT" ] && args+=(--autonomous-max-continuations "$MAXCONT")
+  fi
+  # Every run gets a wall clock. Two distinct hangs make this non-optional:
+  # an autonomous gate that can never pass (--autonomous-timeout-ms does not
+  # stop it), and an intermittent stall that produces no session file at all.
+  if [ -z "$TIMEOUT" ]; then
+    if [ "${AUTO:-0}" = 1 ]; then TIMEOUT="${PW_AUTO_TIMEOUT:-900}"
+    else TIMEOUT="${PW_TIMEOUT:-900}"; fi
+  fi
+  [ "$TIMEOUT" = 0 ] && { prime-agent -p "$PROMPT" "${args[@]}"; return; }
+  local attempt
+  for attempt in 1; do
+    local mark; mark=$(mktemp)
+    prime-agent -p "$PROMPT" "${args[@]}" & local pid=$!
+    ( sleep "$TIMEOUT"
+      kill -0 "$pid" 2>/dev/null || exit 0
+      echo timeout > "$mark"
+      kill -TERM "$pid" 2>/dev/null
+      sleep 5; kill -9 "$pid" 2>/dev/null ) >/dev/null 2>&1 & local wd=$!
+    disown "$wd" 2>/dev/null || true
+    local rc=0; wait "$pid" || rc=$?
+    kill "$wd" 2>/dev/null || true
+    if [ ! -s "$mark" ]; then rm -f "$mark"; return "$rc"; fi
+    rm -f "$mark"
+    echo "pw: killed after ${TIMEOUT}s wall clock." >&2
+    if [ "${AUTO:-0}" = 1 ]; then
+      echo "pw: a gate that can never pass hangs prime-agent; check the gate, then run 'pw unwedge'." >&2
+      return 124
+    fi
+    echo "pw: runs can be slow to start - use --json to watch progress, or raise PW_TIMEOUT." >&2
+    return 124
+  done
+  return 124
+}
+
+# Gates persist one-per-line so `pw say <name> --auto` can reuse them.
+save_gates() {
+  local d="$1"
+  [ "${#GATES[@]}" -eq 0 ] && return 0
+  printf '%s\n' "${GATES[@]}" > "$d/gates"
+}
+
+load_gates() {
+  local d="$1"
+  [ "${#GATES[@]}" -gt 0 ] && return 0          # explicit --gate replaces saved ones
+  [ -f "$d/gates" ] || return 0
+  while IFS= read -r line; do
+    [ -n "$line" ] && GATES+=("$line")
+  done < "$d/gates"
+}
+
+cmd_spawn() {
+  local name="$1"; shift
+  parse_flags "$@"; read_prompt ${REST+"${REST[@]}"}
+  local d; d=$(wdir "$name")
+  [ -e "$d" ] && die "worker '$name' already exists (pw say $name ... | pw retire $name --yes)"
+  MODEL="${MODEL:-$PW_DEFAULT_MODEL}"
+  CWD="${CWD:-$PWD}"
+  [ -d "$CWD" ] || die "--cwd '$CWD' is not a directory"
+  CWD=$(cd "$CWD" && pwd)
+  mkdir -p "$d"
+  { echo "NAME=$name"; echo "MODEL=$MODEL"; echo "CWD=$CWD"
+    echo "PROVIDER=$PW_PROVIDER"; echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "CITE=${CITE:-0}"; } > "$d/worker.env"
+  save_gates "$d"
+  run_agent "" "" "$d"
+}
+
+cmd_say() {
+  local name="$1"; shift
+  local d; d=$(wdir "$name")
+  [ -f "$d/worker.env" ] || die "no worker '$name' (try: pw list)"
+  # shellcheck disable=SC1090
+  . "$d/worker.env"
+  local saved_model="$MODEL" saved_cwd="$CWD" saved_cite="${CITE:-0}"
+  parse_flags "$@"; read_prompt ${REST+"${REST[@]}"}
+  MODEL="${MODEL:-$saved_model}"; CWD="${CWD:-$saved_cwd}"; CITE="${CITE:-$saved_cite}"
+  [ "$AUTO" = 1 ] && load_gates "$d"
+  save_gates "$d"
+  run_agent -r "$(handle "$name")" "$d"
+}
+
+cmd_fork() {
+  local src="$1" dst="$2"; shift 2
+  local sd; sd=$(wdir "$src"); local dd; dd=$(wdir "$dst")
+  [ -f "$sd/worker.env" ] || die "no worker '$src'"
+  [ -e "$dd" ] && die "worker '$dst' already exists"
+  local h; h=$(handle "$src")
+  # shellcheck disable=SC1090
+  . "$sd/worker.env"
+  local saved_model="$MODEL" saved_cwd="$CWD" saved_cite="${CITE:-0}"
+  parse_flags "$@"; read_prompt ${REST+"${REST[@]}"}
+  MODEL="${MODEL:-$saved_model}"; CWD="${CWD:-$saved_cwd}"; CITE="${CITE:-$saved_cite}"
+  mkdir -p "$dd"
+  { echo "NAME=$dst"; echo "MODEL=$MODEL"; echo "CWD=$CWD"
+    echo "PROVIDER=$PW_PROVIDER"; echo "CREATED=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "CITE=${CITE:-0}"; echo "FORKED_FROM=$src"; } > "$dd/worker.env"
+  [ "$AUTO" = 1 ] && [ "${#GATES[@]}" -eq 0 ] && load_gates "$sd"
+  save_gates "$dd"
+  run_agent --fork "$h" "$dd"
+}
+
+cmd_list() {
+  [ -d "$PW_HOME" ] || { echo "no workers"; return 0; }
+  local found=0 d
+  for d in "$PW_HOME"/*/; do
+    [ -f "$d/worker.env" ] || continue
+    if [ "$found" = 0 ]; then
+      printf '%-22s %-22s %6s %9s %8s  %s\n' NAME MODEL TURNS TOKENS SIZE CWD
+      found=1
+    fi
+    ( # subshell so sourced vars never leak between workers
+      . "$d/worker.env"
+      local f stats size
+      f=$(find "$d" -maxdepth 1 -name '*.jsonl' | head -1)
+      if [ -n "$f" ]; then
+        stats=$(python3 - "$f" <<'PY'
+import json,sys
+turns=tok=0
+for line in open(sys.argv[1], errors="replace"):
+    try: d=json.loads(line)
+    except Exception: continue
+    if d.get("type")!="message": continue
+    m=d.get("message",{})
+    if m.get("role")=="user": turns+=1
+    u=m.get("usage") or {}
+    tok+=u.get("totalTokens") or 0
+print(turns,tok)
+PY
+)
+        size=$(du -h "$f" | cut -f1)
+      else stats="0 0"; size="-"; fi
+      printf '%-22s %-22s %6s %9s %8s  %s\n' "$NAME" "$MODEL" ${stats} "$size" "$CWD"
+    )
+  done
+  [ "$found" = 1 ] || echo "no workers"
+}
+
+cmd_history() {
+  local name="$1"; local n="${2:-6}"
+  python3 - "$(handle "$name")" "$n" <<'PY'
+import json,sys
+rows=[]
+for line in open(sys.argv[1], errors="replace"):
+    try: d=json.loads(line)
+    except Exception: continue
+    if d.get("type")!="message": continue
+    m=d.get("message",{}); role=m.get("role")
+    if role not in ("user","assistant"): continue
+    c=m.get("content")
+    if not isinstance(c,list): continue
+    txt="\n".join(b.get("text","") for b in c if b.get("type")=="text").strip()
+    if txt: rows.append((role,txt))
+for role,txt in rows[-int(sys.argv[2]):]:
+    print(f"--- {role} ---\n{txt}\n")
+PY
+}
+
+# Local harness artifacts sit in a sibling of the session dir, keyed by the
+# session's INTERNAL id (the one in the jsonl header, not the filename).
+harness_file() {
+  local name="$1" d; d=$(wdir "$name")
+  local internal; internal=$(python3 -c '
+import json,sys
+with open(sys.argv[1], errors="replace") as fh:
+    print(json.loads(fh.readline()).get("id",""))
+' "$(handle "$name")")
+  [ -n "$internal" ] || die "could not read session id for '$name'"
+  printf '%s/session-artifacts/%s/harness/harness_state.json' "$(dirname "$d")" "$internal"
+}
+
+cmd_refine() {
+  local name="$1"; shift
+  local d; d=$(wdir "$name")
+  [ -f "$d/worker.env" ] || die "no worker '$name' (try: pw list)"
+  # shellcheck disable=SC1090
+  . "$d/worker.env"
+  AUTO=0; GATES=(); MAXTURNS=""; MAXCONT=""; THINKING=""; MODE=""; SYSTEM=(); CITE=0
+  TIMEOUT="${PW_REFINE_TIMEOUT:-600}"
+  PROMPT="/refine${*:+ $*}"
+  run_agent -r "$(handle "$name")" "$d"
+}
+
+cmd_learned() {
+  local f
+  if [ "${1:-}" = "--global" ]; then
+    f="$HOME/.prime/agent/harness/harness_state.json"
+  elif [ -n "${1:-}" ]; then
+    f=$(harness_file "$1")
+  else
+    f="$HOME/.prime/agent/harness/harness_state.json"
+  fi
+  [ -f "$f" ] || { echo "nothing learned yet ($f)"; return 0; }
+  python3 - "$f" <<'PY2'
+import json,sys
+d=json.load(open(sys.argv[1]))
+n=0
+for kind,items in (d.get("entries") or {}).items():
+    for k,v in items.items():
+        n+=1
+        print(f"[{kind}] {v.get('title',k)}")
+        print(f"  scope={v.get('scope')} path={v.get('path')} source={v.get('source')}")
+        body=(v.get('content') or '').strip()
+        print("  " + body.replace("\n","\n  ") + "\n")
+if not n: print("no entries")
+log=d.get("refinements") or []
+if log:
+    print(f"-- refinement log ({len(log)}) --")
+    for r in log[-5:]:
+        print(" ", r.get("id"), "|", (r.get("summary") or "")[:90])
+PY2
+}
+
+cmd_retire() {
+  local name="$1" yes="${2:-}"
+  local d; d=$(wdir "$name")
+  [ -d "$d" ] || die "no worker '$name'"
+  if [ "$yes" != "--yes" ]; then
+    echo "would delete $d ($(du -sh "$d" | cut -f1)); re-run with --yes to confirm"
+    return 0
+  fi
+  rm -rf "$d"; echo "retired $name"
+}
+
+case "${1:-}" in
+  spawn)   shift; [ "$#" -ge 1 ] || die "usage: pw spawn <name> [flags] [prompt]"; cmd_spawn "$@" ;;
+  say)     shift; [ "$#" -ge 1 ] || die "usage: pw say <name> [flags] [prompt]"; cmd_say "$@" ;;
+  fork)    shift; [ "$#" -ge 2 ] || die "usage: pw fork <src> <dst> [flags] [prompt]"; cmd_fork "$@" ;;
+  list)    cmd_list ;;
+  handle)  shift; [ "$#" -ge 1 ] || die "usage: pw handle <name>"; handle "$1"; echo ;;
+  history) shift; [ "$#" -ge 1 ] || die "usage: pw history <name> [n]"; cmd_history "$@" ;;
+  retire)  shift; [ "$#" -ge 1 ] || die "usage: pw retire <name> [--yes]"; cmd_retire "$@" ;;
+  refine)  shift; [ "$#" -ge 1 ] || die "usage: pw refine <name> [--global] [instructions]"; cmd_refine "$@" ;;
+  learned) shift; cmd_learned "${1:-}" ;;
+  models)  shift; prime-agent model list "${1:-opencode-go}" ;;
+  unwedge) prime-agent shutdown --force ;;
+  ""|-h|--help|help)
+    cat <<'USAGE'
+pw - prime-agent delegation workers (a worker is a named directory)
+
+  pw spawn <name> [--cwd DIR] [--model M] [--thinking L] [--system TXT] [--json] [auto] [prompt]
+  pw say <name> [--model M] [--thinking L] [--system TXT] [--json] [auto] [prompt]
+  pw fork <src> <dst> [flags] [prompt]
+
+autonomous flags (auto):
+  --cite                 require path:line citations (default for review/analysis)
+  --gate "<shell cmd>"   repeatable; implies --auto; runs in the worker's cwd
+  --auto                 loop without gates (turn/token limits only)
+  --max-turns N  --max-continuations N
+  --timeout SECS         wall clock kill (autonomous runs default to 900)
+  pw list
+  pw handle <name>
+  pw history <name> [n]
+  pw refine <name> [--global] [instructions]   teach prime-agent from this session
+  pw refine <name> rollback <id> [--global]   undo a refinement
+  pw learned [<name>|--global]                show what was learned
+  pw retire <name> [--yes]
+  pw models [pattern]
+  pw unwedge
+
+Prompt comes from trailing arguments, or stdin when none are given.
+spawn records --cwd, --model and gates; say and fork reuse them unless overridden.
+A gate proves a command exits 0 - not that the work is correct. Review the diff.
+Env: PW_HOME, PW_PROVIDER, PW_DEFAULT_MODEL, PW_TIMEOUT, PW_AUTO_TIMEOUT, PW_REFINE_TIMEOUT
+--timeout 0 disables the wall clock. Every run is bounded by default.
+--global writes to the shared harness every session reads - ask the user first.
+USAGE
+    ;;
+  *) die "unknown command '${1}' (pw --help)" ;;
+esac
