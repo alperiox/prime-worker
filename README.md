@@ -16,7 +16,7 @@ pw retire auth-review --yes
 
 `~/.claude/prime-workers/<name>/` holds one session `.jsonl` plus a `worker.env` recording the `--cwd`, `--model` and flags it was spawned with. The name is the only handle you need — no session ids, no `ls -t` races, and concurrent workers cannot collide.
 
-That matters more than it sounds. `prime-agent` writes a session file whose **filename does not match the session id reported in its own JSON stream**; resuming by the reported id silently starts a fresh conversation. Addressing workers by directory sidesteps it entirely.
+That matters more than it sounds. Sessions are UUID-named `.jsonl` files, so without a convention you end up carrying ids between turns, racing `ls -t` whenever two workers run at once, and guessing which of thirty files in the store is the 50MB one. A named directory gives each worker a stable, readable handle, lets concurrent workers coexist, records the flags it was spawned with so follow-up turns need none, and makes retiring one an `rm -rf`.
 
 ## Requirements
 
@@ -79,7 +79,7 @@ The worker loops, feeding each failure back to itself, until every gate exits 0 
 
 **A gate proves a command exits 0. It does not prove the work is correct.** The worker can read its own gate and reason about what would satisfy it — the classic failure is making tests pass by editing the tests. Name off-limits paths in the prompt, and read the diff regardless.
 
-**Run your gate by hand first.** A gate that can never pass hangs `prime-agent` outright, and its own `--autonomous-timeout-ms` does not stop it. Every `pw` run is bounded by a wall clock (`PW_TIMEOUT`, default 900s, exit 124).
+**Run your gate by hand first.** A gate that can never pass burns every retry before giving up, and a typo'd path is enough to cause it. Current `prime-agent` ends such a run cleanly, exiting non-zero with `autonomous limit reached: maxContinuations reached`; older builds could stall instead, so every `pw` run is also bounded by a wall clock (`PW_TIMEOUT`, default 900s, exit 124).
 
 ### Refinement
 

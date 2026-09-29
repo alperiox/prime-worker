@@ -87,7 +87,7 @@ EOF
 
 Limits default to 12 turns / 3 continuations / 80K tokens / 30 min; override with `--max-turns` and `--max-continuations`.
 
-**Run the gate yourself before delegating.** A gate that can never pass hangs `prime-agent` indefinitely — it stalls *before* writing a session file, and `--autonomous-timeout-ms` does not stop it (measured: runs still alive after 27 minutes with that flag set to 60 seconds). `pw` therefore imposes its own wall clock: autonomous runs default to 900s, `--timeout <secs>` overrides, and a kill exits **124**. Run `pw unwedge` before resuming a worker that was timed out.
+**Run the gate yourself before delegating.** A gate that can never pass costs a full round of retries before it gives up, and a typo'd path or missing dependency is enough to trigger it. On current `prime-agent` the run ends cleanly — the gate retries, the continuation limit trips, and it exits non-zero with `autonomous limit reached: maxContinuations reached`. On builds a few months old it could instead stall indefinitely without ever writing a session file, so `pw` still imposes its own wall clock: autonomous runs default to 900s, `--timeout <secs>` overrides, and a kill exits **124**.
 
 **A gate proves a command exits 0. It does not prove the work is correct.** The worker can read its own gate and reason about what would satisfy it — the classic failure is making tests pass by editing the tests. Gates are a ratchet against *premature stopping*, not an adversarial check. So:
 
@@ -166,12 +166,11 @@ Verify anything you are about to **act** on. Pure orientation ("this is a token 
 
 | Symptom | Cause and fix |
 |---|---|
-| Worker answers as if the conversation never happened | Someone resumed by the session id from the JSON stream. **That id does not match the filename on disk** and resolves to nothing. Use `pw`, which addresses workers by directory. |
 | `registered to a failed worker that could not be safely reclaimed` | A prime-agent process was killed mid-turn. Run `pw unwedge` (`prime-agent shutdown --force`). **`prime-agent doctor` does not fix this** — it only prints status. Note `unwedge` stops *all* prime-agent services, including interactive ones. |
 | A flag in `--help` does nothing, or a working command is missing from it | `prime-agent --help` is incomplete and partly stale. `model list` works but is undocumented; `--list-models` was removed. Trust the binary over its help text. |
 | Resumes get slower and slower | Every turn re-reads the whole `.jsonl`. Check `pw list` for size — sessions reach tens of MB. Retire finished workers; fork rather than growing one worker forever. |
 | A run sits silent for minutes | Text mode prints nothing until the run ends, so slow and hung look identical. Re-run with `--json`: a healthy run emits `session` and `agent_start` within a second or two, and `pw history <name>` shows whether the work actually completed. Every run is bounded by `PW_TIMEOUT` (default 900s, exit 124). |
-| Autonomous run sits silent for many minutes and no session file ever appears | Its gate can never pass. This hangs `prime-agent` outright; `pw` kills it at `--timeout` (default 900s, exit 124). Test the gate command by hand first — a typo'd path or a missing dependency is enough to trigger it. |
+| Autonomous run exits non-zero with `maxContinuations reached` | Its gate never passed. Read the gate output in the run log, then fix the gate or the brief — the limit did its job. On older builds the same situation could hang instead, which is what `--timeout` (default 900s, exit 124) backstops. |
 | `Local harness refinement requires a persisted session` | The session was started with `--no-session`. `pw` always persists, so this only appears if you called `prime-agent` by hand. |
 | `pw list` shows nothing but work was delegated | One-shot `prime-agent -p` runs are not workers. Also note `prime-agent list` is a *different* registry that only sees interactive TUI agents and will never show `pw` workers. |
 
@@ -184,6 +183,6 @@ Verify anything you are about to **act** on. Pure orientation ("this is a token 
 - Using this for a single-exchange descriptive read — that is `delegate-bulk-read`
 - Reaching for `kimi-k3` on a task you could just do here
 - Treating a green gate as proof of correctness, or gating on tests the worker is free to edit
-- Passing a gate you have never run yourself — an unsatisfiable gate hangs rather than fails
+- Passing a gate you have never run yourself — an unsatisfiable gate burns every retry before failing
 - Running `pw refine --global` without showing the user the entries and asking
 - Promoting a task-specific memory to global scope because the refinement offered it
