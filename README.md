@@ -1,6 +1,6 @@
 # prime-worker
 
-A [Claude Code](https://claude.com/claude-code) skill for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/earendil-works/prime-agent) subagent that remembers context across turns.
+A [Claude Code](https://claude.com/claude-code) skill for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
 
 Claude spawns a cheap model as a named worker, keeps talking to it, branches it, and lets it learn from its own mistakes — while the expensive context stays free for the work that needs it.
 
@@ -20,7 +20,7 @@ That matters more than it sounds. `prime-agent` writes a session file whose **fi
 
 ## Requirements
 
-- [`prime-agent`](https://github.com/earendil-works/prime-agent) on your `PATH` (developed against 0.8.0)
+- [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) on your `PATH` (developed against 0.8.0)
 - A configured model provider. Defaults target an **OpenCode Go** subscription with `deepseek-v4-flash`; override with `PW_PROVIDER` and `PW_DEFAULT_MODEL` for any provider `prime-agent` supports.
 - `bash`, `python3`
 
