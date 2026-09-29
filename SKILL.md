@@ -23,17 +23,11 @@ Use `AskUserQuestion` with `deepseek-v4-flash` first and marked `(Recommended)`.
 
 | model | ctx / max-out | fits |
 |---|---|---|
-| **`deepseek-v4-flash`** *(default)* | 1M / 384K | Default for everything. Biggest output budget on the subscription. |
-| `mimo-v2.5` | 1M / 128K | Faster and lighter; accepts images. Good when the work is mechanical. |
-| `mimo-v2.5-pro` | 1M / 128K | Same shape, more capable. |
-| `gpt-5.6-luna` | 1.05M / 128K | Strong reasoning per unit cost; accepts images. |
-| `deepseek-v4-pro` | 1M / 384K | Step up when flash returns sloppy edits. |
-| `qwen3.8-max`, `grok-4.5` | 1M / 500K | Genuinely hard reasoning. `grok-4.5` has a 500K output budget. |
-| `kimi-k3` | 1M / 131K | Top tier. If the task needs this, consider doing it yourself instead. |
-| `hy3` | 256K / 64K | Near-free. Smoke tests and trivial transforms. |
-| `ox-alpha-free` | 1M / 131K | Free, experimental. |
+| **`deepseek-v4-flash`** *(default)* | 1M / 384K | Default for everything. Much the biggest output budget, and the only one that will hold a long refactor's worth of edits in one turn. |
+| `gpt-5.6-luna` | 1.05M / 128K | Strongest reasoning of the three; accepts images. Reach for it when flash returns sloppy edits. |
+| `minimax-m3` | 1M / 131K | Accepts images, middle of the range. |
 
-`pw models` prints the live list — **run it if anything here looks stale**, because the catalog is compiled into `prime-agent` and changes on update. It shows context and capabilities but not price.
+**Run `pw models` before offering the list — it is authoritative and this table is not.** The catalog is compiled into `prime-agent` and regenerated from live provider catalogs, so it moves on upgrade: opencode-go went from 23 models to these 3 between 0.8.0 and 0.9.7, retiring `hy3`, `ox-alpha-free`, both MiMo models, `deepseek-v4-pro`, the GLM/Qwen/Kimi families and `grok-4.5`. Offering a model that no longer exists wastes a turn on an error. `pw models` shows context and capabilities but not price.
 
 Override the default permanently with `PW_DEFAULT_MODEL` in the environment.
 
