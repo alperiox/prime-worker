@@ -27,7 +27,9 @@ Use `AskUserQuestion` with `deepseek-v4-flash` first and marked `(Recommended)`.
 | `gpt-5.6-luna` | 1.05M / 128K | Strongest reasoning of the three; accepts images. Reach for it when flash returns sloppy edits. |
 | `minimax-m3` | 1M / 131K | Accepts images, middle of the range. |
 
-**Run `pw models` before offering the list — it is authoritative and this table is not.** The catalog is compiled into `prime-agent` and regenerated from live provider catalogs, so it moves on upgrade: opencode-go went from 23 models to these 3 between 0.8.0 and 0.9.7, retiring `hy3`, `ox-alpha-free`, both MiMo models, `deepseek-v4-pro`, the GLM/Qwen/Kimi families and `grok-4.5`. Offering a model that no longer exists wastes a turn on an error. `pw models` shows context and capabilities but not price.
+**`pw models` is a floor, not the list.** It shows only what is compiled into `prime-agent`'s catalog — 3 models for opencode-go on 0.9.7, down from 23 on 0.8.0. The provider still accepts the uncatalogued ids: `mimo-v2.5`, `hy3`, `kimi-k3` and `deepseek-v4.1-flash` were each verified working on 0.9.7 while absent from `pw models`. So if the user names a model the list does not show, **try it rather than refusing** — an upgrade that drops catalog entries does not take the models away.
+
+The cost of going off-catalog is metadata: an uncatalogued model has no recorded context window, max-output or price, so nothing warns you before a long session overflows it. Prefer a catalogued model when the session will run long, and use `pw list` to watch the token count when you don't.
 
 Override the default permanently with `PW_DEFAULT_MODEL` in the environment.
 
