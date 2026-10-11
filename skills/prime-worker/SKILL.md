@@ -19,7 +19,7 @@ Drive it with the `pw` script bundled beside this skill: `scripts/pw`, relative 
 
 Ask **once per worker, at spawn**. `pw say` reuses the recorded model silently; do not re-ask every turn.
 
-Use `AskUserQuestion` with `deepseek-v4-flash` first and marked `(Recommended)`. Sensible option set:
+Ask with your structured question tool when the host has one (`AskUserQuestion` in Claude Code), otherwise in plain text, listing `deepseek-v4-flash` first and marked `(Recommended)`. Sensible option set:
 
 | model | ctx / max-out | fits |
 |---|---|---|

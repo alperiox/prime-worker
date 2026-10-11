@@ -1,8 +1,8 @@
 # prime-worker
 
-A [Claude Code](https://claude.com/claude-code) skill for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
+An agent skill for [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex), [Pi](https://github.com/earendil-works/pi) and [OpenCode](https://opencode.ai) for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
 
-Claude spawns a cheap model as a named worker, keeps talking to it, branches it, and lets it learn from its own mistakes — while the expensive context stays free for the work that needs it.
+Your agent spawns a cheap model as a named worker, keeps talking to it, branches it, and lets it learn from its own mistakes — while the expensive context stays free for the work that needs it.
 
 ```bash
 pw spawn auth-review --cwd ~/proj/src/auth --model deepseek-v4-flash --cite "Map the token refresh path."
@@ -26,14 +26,44 @@ That matters more than it sounds. Sessions are UUID-named `.jsonl` files, so wit
 
 ## Install
 
-### As a plugin
+Every host below loads the same `skills/prime-worker/` folder, so the skill and `pw` arrive together.
+
+### Claude Code
 
 ```
 /plugin marketplace add alperiox/prime-worker
 /plugin install prime-worker@alperiox
 ```
 
-The skill and `pw` arrive together, and Claude Code keeps them updated.
+Claude Code keeps it updated.
+
+### Codex
+
+```bash
+codex plugin marketplace add alperiox/prime-worker
+codex plugin add prime-worker@alperiox
+```
+
+Start a fresh session afterwards; the skill appears as `prime-worker:prime-worker`.
+
+### Pi
+
+```bash
+pi install git:github.com/alperiox/prime-worker
+```
+
+### OpenCode
+
+OpenCode has no plugin catalog for skills; point its config at a clone instead. Merge this into your existing `opencode.json`, using an absolute path:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["/absolute/path/to/prime-worker/skills"]
+  }
+}
+```
 
 ### By hand
 
