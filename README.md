@@ -1,6 +1,6 @@
 # prime-worker
 
-An agent skill for [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex), [Pi](https://github.com/earendil-works/pi) and [OpenCode](https://opencode.ai) for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
+An agent skill for [Claude Code](https://claude.com/claude-code), [Codex](https://developers.openai.com/codex), [Pi](https://github.com/earendil-works/pi), [OpenCode](https://opencode.ai) and [Antigravity](https://antigravity.google) for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
 
 Your agent spawns a cheap model as a named worker, keeps talking to it, branches it, and lets it learn from its own mistakes — while the expensive context stays free for the work that needs it.
 
@@ -63,6 +63,15 @@ OpenCode has no plugin catalog for skills; point its config at a clone instead. 
     "paths": ["/absolute/path/to/prime-worker/skills"]
   }
 }
+```
+
+### Antigravity
+
+`agy` installs plugins from a local directory, so clone first:
+
+```bash
+git clone https://github.com/alperiox/prime-worker ~/src/prime-worker
+agy plugin install ~/src/prime-worker
 ```
 
 ### By hand
