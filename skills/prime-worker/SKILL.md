@@ -11,7 +11,7 @@ description: Use when delegating multi-turn work to a cheap local prime-agent su
 
 **A worker is a named directory.** `~/.claude/prime-workers/<name>/` holds exactly one session `.jsonl` plus a `worker.env` recording the `--cwd` and `--model` it was spawned with. The name is the only handle you ever need.
 
-Drive it with `scripts/pw`. Do not hand-roll `prime-agent` invocations — the raw CLI has a trap that silently breaks continuity (see Failure Modes).
+Drive it with the `pw` script bundled beside this skill: `scripts/pw`, relative to this file's own directory, or plain `pw` when it is on `PATH`. Do not hand-roll `prime-agent` invocations — the raw CLI has a trap that silently breaks continuity (see Failure Modes).
 
 ## Choosing the Model: Ask First
 

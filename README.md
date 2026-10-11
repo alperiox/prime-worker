@@ -26,9 +26,23 @@ That matters more than it sounds. Sessions are UUID-named `.jsonl` files, so wit
 
 ## Install
 
+### As a plugin
+
+```
+/plugin marketplace add alperiox/prime-worker
+/plugin install prime-worker@alperiox
+```
+
+The skill and `pw` arrive together, and Claude Code keeps them updated.
+
+### By hand
+
+If you would rather not use plugins, clone it anywhere and link the skill into `~/.claude/skills/`:
+
 ```bash
-git clone https://github.com/alperiox/prime-worker ~/.claude/skills/prime-worker
-~/.claude/skills/prime-worker/scripts/pw --help
+git clone https://github.com/alperiox/prime-worker ~/src/prime-worker
+ln -s ~/src/prime-worker/skills/prime-worker ~/.claude/skills/prime-worker
+~/src/prime-worker/skills/prime-worker/scripts/pw --help
 ```
 
 Claude Code picks the skill up from `~/.claude/skills/`. `pw` also works standalone from any shell, with or without Claude.
@@ -36,7 +50,7 @@ Claude Code picks the skill up from `~/.claude/skills/`. `pw` also works standal
 Put it on your `PATH` if you like:
 
 ```bash
-ln -s ~/.claude/skills/prime-worker/scripts/pw ~/.local/bin/pw
+ln -s ~/src/prime-worker/skills/prime-worker/scripts/pw ~/.local/bin/pw
 ```
 
 ## Commands
