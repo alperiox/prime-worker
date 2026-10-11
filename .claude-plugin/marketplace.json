@@ -1,0 +1,17 @@
+{
+  "name": "prime-worker",
+  "owner": {
+    "name": "alperiox",
+    "url": "https://github.com/alperiox"
+  },
+  "metadata": {
+    "description": "Claude Code plugin for multi-turn delegation to local prime-agent workers."
+  },
+  "plugins": [
+    {
+      "name": "prime-worker",
+      "source": "./",
+      "description": "Delegate multi-turn work to a local prime-agent subagent that remembers context across turns."
+    }
+  ]
+}

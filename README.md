@@ -1,6 +1,6 @@
 # prime-worker
 
-A [Claude Code](https://claude.com/claude-code) skill for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
+A [Claude Code](https://claude.com/claude-code) plugin for delegating **multi-turn** work to a local [`prime-agent`](https://github.com/PrimeIntellect-ai/prime-agent) subagent that remembers context across turns.
 
 Claude spawns a cheap model as a named worker, keeps talking to it, branches it, and lets it learn from its own mistakes — while the expensive context stays free for the work that needs it.
 
@@ -26,17 +26,18 @@ That matters more than it sounds. Sessions are UUID-named `.jsonl` files, so wit
 
 ## Install
 
-```bash
-git clone https://github.com/alperiox/prime-worker ~/.claude/skills/prime-worker
-~/.claude/skills/prime-worker/scripts/pw --help
+prime-worker is a Claude Code plugin. Inside Claude Code:
+
+```
+/plugin marketplace add alperiox/prime-worker
+/plugin install prime-worker@prime-worker
 ```
 
-Claude Code picks the skill up from `~/.claude/skills/`. `pw` also works standalone from any shell, with or without Claude.
-
-Put it on your `PATH` if you like:
+`pw` also works standalone from any shell, with or without Claude. Clone the repo and put it on your `PATH` if you like:
 
 ```bash
-ln -s ~/.claude/skills/prime-worker/scripts/pw ~/.local/bin/pw
+git clone https://github.com/alperiox/prime-worker ~/src/prime-worker
+ln -s ~/src/prime-worker/skills/prime-worker/scripts/pw ~/.local/bin/pw
 ```
 
 ## Commands

@@ -1,0 +1,13 @@
+{
+  "name": "prime-worker",
+  "version": "0.1.0",
+  "description": "Delegate multi-turn work to a local prime-agent subagent that remembers context across turns.",
+  "author": {
+    "name": "alperiox",
+    "url": "https://github.com/alperiox"
+  },
+  "homepage": "https://github.com/alperiox/prime-worker",
+  "repository": "https://github.com/alperiox/prime-worker",
+  "license": "MIT",
+  "keywords": ["prime-agent", "delegation", "subagent", "multi-turn"]
+}
