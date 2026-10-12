@@ -1,0 +1,20 @@
+{
+  "name": "alperiox",
+  "interface": {
+    "displayName": "Plugins by alperiox"
+  },
+  "plugins": [
+    {
+      "name": "prime-worker",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Development"
+    }
+  ]
+}

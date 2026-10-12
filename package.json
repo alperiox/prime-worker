@@ -1,0 +1,12 @@
+{
+  "name": "prime-worker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Delegate multi-turn work to a cheap local prime-agent subagent that remembers context across turns",
+  "repository": "https://github.com/alperiox/prime-worker",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "pi": {
+    "skills": ["./skills"]
+  }
+}

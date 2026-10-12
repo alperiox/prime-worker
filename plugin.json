@@ -1,0 +1,5 @@
+{
+  "$schema": "https://antigravity.google/schemas/v1/plugin.json",
+  "name": "prime-worker",
+  "description": "Delegate multi-turn work to a cheap local prime-agent subagent that remembers context across turns"
+}
