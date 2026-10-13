@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # SC2034/SC2043: the single-iteration `for attempt in 1` loop in pw is intentional.
+      - name: shellcheck pw
+        run: shellcheck --severity=warning --exclude=SC2034,SC2043 skills/prime-worker/scripts/pw
+
+      - name: pw --help smoke test
+        run: skills/prime-worker/scripts/pw --help
+
+      - name: manifests are valid JSON with one shared version
+        run: |
+          python3 - <<'PY'
+          import json, sys
+          files = [".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "package.json"]
+          other = [".claude-plugin/marketplace.json", ".agents/plugins/marketplace.json",
+                   "plugin.json", ".github/release-please-config.json", ".github/release-please-manifest.json"]
+          for f in other:
+              json.load(open(f))
+          versions = {f: json.load(open(f))["version"] for f in files}
+          versions[".github/release-please-manifest.json"] = json.load(open(".github/release-please-manifest.json"))["."]
+          print(versions)
+          if len(set(versions.values())) != 1:
+              sys.exit("version mismatch across manifests")
+          PY
+
+      - name: SKILL.md has name and description frontmatter
+        run: |
+          head -n 4 skills/prime-worker/SKILL.md | grep -q '^name: prime-worker$'
+          head -n 4 skills/prime-worker/SKILL.md | grep -q '^description: '
