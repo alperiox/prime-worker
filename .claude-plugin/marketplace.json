@@ -9,7 +9,6 @@
     {
       "name": "prime-worker",
       "description": "Delegate multi-turn work to a cheap local prime-agent subagent that remembers context across turns",
-      "version": "0.1.0",
       "source": "./",
       "author": {
         "name": "Alper",

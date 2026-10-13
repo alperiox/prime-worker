@@ -1,6 +1,6 @@
 ---
 name: prime-worker
-description: Use when delegating multi-turn work to a cheap local prime-agent subagent that must remember context across turns — iterating on a refactor, working through a subsystem, branching a what-if from an established investigation. Triggers when a delegated task needs more than one exchange, or when an earlier delegation should be continued rather than restarted. For one-shot descriptive reading that needs no follow-up, use delegate-bulk-read instead.
+description: Use when delegating multi-turn work to a cheap local prime-agent subagent that must remember context across turns — iterating on a refactor, working through a subsystem, branching a what-if from an established investigation. Triggers when a delegated task needs more than one exchange, or when an earlier delegation should be continued rather than restarted. Not for one-shot descriptive reading that needs no follow-up; read those directly or use a one-shot subagent.
 ---
 
 # Prime Worker
@@ -176,7 +176,7 @@ Verify anything you are about to **act** on. Pure orientation ("this is a token 
 - Re-asking the model question on every `pw say` instead of once at spawn
 - Building on delegated edits without reading `git diff`
 - Pointing `--cwd` at a repo root when one subdirectory would do
-- Using this for a single-exchange descriptive read — that is `delegate-bulk-read`
+- Using this for a single-exchange descriptive read — read it directly or use a one-shot subagent instead
 - Reaching for `kimi-k3` on a task you could just do here
 - Treating a green gate as proof of correctness, or gating on tests the worker is free to edit
 - Passing a gate you have never run yourself — an unsatisfiable gate burns every retry before failing
